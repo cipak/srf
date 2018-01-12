@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+<script
+  src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script>
+
+<style>
+html, body { height: 100%; }
+
+.images {
+	position: relative; 
+}
+
+img {
+	border: 1px solid #ddd;
+}
+
+canvas {
+	position: absolute;
+	left: 0;
+	top: 0;
+	border: 1px solid green;
+	display: none;
+}
+.wbars {
+	position: relative;
+}
+.wbar {
+	height: 50px;
+	background-color: black;
+	color: gray;
+	font-size: 200%;
+	font-family: monospace;
+	padding: 4px;
+	position: relative;
+	width: 1px;
+	margin-left: 50%;
+	overflow: visible;
+	white-space: nowrap;
+}
+#status {
+	text-align: center;
+	font-size: 150%;
+}
+</style>
+<body>
+	Learning rates:
+	w0: <input id="rate0" value="0.2">
+	w1: <input id="rate1" value="0.0001">
+	w2: <input id="rate2" value="0.0001">
+
+	Milliseconds between draws: <input id="timeout_ms" value="10">
+	<hr>
+
+	<div class="images">
+		<img src="test01.bmp">
+		<img src="test02.bmp">
+		<img src="test03.bmp">
+		<img src="test04.bmp">
+		<img src="test05.bmp">
+		<img src="test06.bmp">
+
+		<canvas></canvas>
+	</div>
+
+	<div id="status">
+		&nbsp;
+	</div>
+
+	<div class="wbars">
+		<div class="wbar" id="w0"></div>
+		<div class="wbar" id="w1"></div>
+		<div class="wbar" id="w2"></div>
+	</div>
+</body>
+<script>
+var canvas = $('canvas')[0];
+var context = canvas.getContext('2d');
+var w, h;
+var iter;
+$('img').on('click', (event) => {
+	
+	var img = event.target;
+	w = canvas.width = img.width;
+	h = canvas.height = img.height;
+
+	var coords = $(img).position();
+	$(canvas).css(coords).show();
+
+	context.drawImage(img, 0, 0, w, h);
+	var pixels = context.getImageData(0, 0, w, h);
+	console.log('pixels', pixels);
+
+	var X = []; // instante-trasaturi
+	var Y = []; // etichete
+
+	for(var i=0; i<pixels.data.length; i+=4) {
+		var r=pixels.data[i];
+		var g=pixels.data[i+1];
+		var b=pixels.data[i+2];
+
+		if(!r || !b) {
+			X.push([1, i/4 % w, Math.floor(i/4/w)]);
+			Y.push(r ? +1 : -1);
+		}
+	}
+
+	//console.log('X', X);
+	//console.log('Y', Y);
+
+	var wHistory = perceptron_online(X, Y);
+	nextFront(wHistory, 0);
+});
+
+function nextFront(wHistory, k) {
+	var W = wHistory[k];
+	if(!W) {
+		frontiera(wHistory[wHistory.length-1]);
+		return;
+	}
+	frontiera(W);
+	setTimeout(()=>nextFront(wHistory, k+1), $('#timeout_ms').val());
+}
+
+function perceptron_online(X, Y) {
+	var wHistory = [];
+	var W = [0.1, 0.1, 0.1];
+	var nrErrs = 1;
+
+	var rates = [0, 1, 2].map(j => Number($('#rate' + j).val()));
+
+	for(iter=0; iter<100000 && nrErrs; iter++) {
+		nrErrs = 0;
+		for(var i=0; i<X.length; i++) {
+			var predict = prod_scalar(W, X[i]);
+			if(predict * Y[i] < 0) {
+				nrErrs++;
+				for(var j=0; j<3; j++) {
+					W[j] += rates[j] * Y[i] * X[i][j];
+				}
+				wHistory.push([W[0], W[1], W[2], iter]);
+			}
+		}
+	}
+	console.log('DONE', iter, 'iterations', nrErrs, 'errors.', 'w=', W);
+	return wHistory;
+}
+
+function prod_scalar(v1, v2) {
+	var prod = 0;
+	for(var i=0; i<v1.length; i++) {
+		prod += v1[i] * v2[i];
+	}
+	return prod;
+}
+
+function frontiera(W) {
+	var x, y;
+
+	context.clearRect(0, 0, w, h);
+	context.beginPath();
+
+	x=0;
+	y=Math.round(-W[0]/W[2]);
+
+	context.moveTo(x, y);
+	
+	x=w-1;
+	y=Math.round((-W[0]-W[1]*x)/W[2]);
+	context.lineTo(x, y);
+	context.stroke();
+
+	draw_bar('#w0', W[0]);
+	draw_bar('#w1', W[1]);
+	draw_bar('#w2', W[2]);
+
+	function draw_bar(sel, weight) {
+		$(sel).width(Math.abs(100*weight)).css({
+			left: weight < 0 ? 100*weight : 0
+		}).text(sel + ' = ' + Math.round(weight * 1000) / 1000);
+	}
+
+	$('#status').text('Total iteratii: ' + iter + '. Iteratia curenta: ' + W[3]);
+}
+</script>
+</body>
+</html>
