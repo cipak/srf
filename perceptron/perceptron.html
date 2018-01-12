@@ -83,6 +83,7 @@ var iter;
 $('img').on('click', (event) => {
 	
 	var img = event.target;
+	img.crossOrigin = 'Anonymous';
 	w = canvas.width = img.width;
 	h = canvas.height = img.height;
 
