@@ -91,6 +91,7 @@ canvas {
 		Total predictii gresite: <b id="errs_tot">n/a</b>.
 		<br>Iteratia curenta: <b id="iter_crt">n/a</b>.
 		Ajustarea curenta: <b id="err_crt">n/a</b>.
+		Erori in iteratie: <b id="errs_iter_crt">n/a</b>.
 		<button onclick="stopShow()">Stop</button>
 	</div>
 
@@ -159,8 +160,9 @@ function perceptron_online(X, Y) {
 	var totErrs = 0;
 
 	var rates = [0, 1, 2].map(j => Number($('#rate' + j).val()));
+	var max_iter = Number($('#max_iter').val());
 
-	for(iter=0; iter<10000 && errs; iter++) {
+	for(iter=0; iter<max_iter && errs; iter++) {
 		errs = 0;
 		for(var i=0; i<X.length; i++) {
 			var y = sgn(prod_scalar(w, X[i])); // predictie
@@ -218,7 +220,7 @@ function perceptron_batch(X, Y) {
 				totErrs++;
 				loss += abs(y);
 				for(var j=0; j<3; j++) {
-					loss_grad[j] += Y[i] * X[i][j];
+					loss_grad[j] += -Y[i] * X[i][j];
 				}
 			}
 		}
@@ -231,7 +233,7 @@ function perceptron_batch(X, Y) {
 		});
 		if(errs) {
 			for(var j=0; j<3; j++) {
-				w[j] += rates[j] * loss_grad[j] / X.length;
+				w[j] -= rates[j] * loss_grad[j] / X.length;
 			}
 		}
 	}
@@ -288,11 +290,12 @@ function frontiera(log) {
 		$(sel).toggle(val !==undefined)
 			.width(Math.abs(100*val)).css({
 				left: val < 0 ? 100*val : 0
-			}).text(label + ' = ' + Math.round(val * 1000) / 1000);
+			}).text(label + ' = ' + Math.round(val * 10000) / 10000);
 	}
 
 	$('#iter_crt').text(log.iter);
 	$('#err_crt').text(undef(log.err, 'n/a'));
+	$('#errs_iter_crt').text(undef(log.errs, 'n/a'));
 }
 </script>
 </body>
