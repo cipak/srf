@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
 <head>
+<meta charset="utf-8">
 <script
   src="https://code.jquery.com/jquery-3.2.1.min.js"
   integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
@@ -47,12 +48,32 @@ canvas {
 }
 </style>
 <body>
-	Learning rates:
-	w0: <input id="rate0" value="0.2">
-	w1: <input id="rate1" value="0.0001">
-	w2: <input id="rate2" value="0.0001">
+	Predef:
+	<select id="predef">
+		<option></option>
+		<option>best-batch</option>
+		<optioN>best-online</option>
+	</select>
 
-	Milliseconds between draws: <input id="timeout_ms" value="10">
+	&nbsp;&nbsp;W:
+	<input id="w0" value="0.1" size="2">
+	<input id="w1" value="0.1" size="2">
+	<input id="w2" value="0.1" size="2">
+	&nbsp;&nbsp;η:
+	<input id="rate0" value="0.2" size="2">
+	<input id="rate1" value="0.0001" size="3">
+	<input id="rate2" value="0.0001" size="3">
+
+	&nbsp;&nbsp;Max. iter:
+	<input size="2" id="max_iter" value="10000">
+
+	&nbsp;&nbsp;Milisecunde intre randari: <input size="2" id="timeout_ms" value="100">
+
+	&nbsp;&nbsp;Algoritm:
+	<select id="alg">
+		<option>batch</option>
+		<option>online</option>
+	</select>
 	<hr>
 
 	<div class="images">
@@ -67,19 +88,34 @@ canvas {
 
 	<div id="status">
 		Total iteratii: <b id="iter_tot">n/a</b>.
-		Total ajustari: <b id="errs_tot">n/a</b>.
+		Total predictii gresite: <b id="errs_tot">n/a</b>.
 		<br>Iteratia curenta: <b id="iter_crt">n/a</b>.
 		Ajustarea curenta: <b id="err_crt">n/a</b>.
 		<button onclick="stopShow()">Stop</button>
 	</div>
 
 	<div class="wbars">
-		<div class="wbar" id="w0"></div>
-		<div class="wbar" id="w1"></div>
-		<div class="wbar" id="w2"></div>
+		<div class="wbar" id="wbar0"></div>
+		<div class="wbar" id="wbar1"></div>
+		<div class="wbar" id="wbar2"></div>
+		<div class="wbar" id="lossbar"></div>
 	</div>
 </body>
 <script>
+
+var PREDEF = {
+	'best-batch': {alg: 'batch', w0: 0, w1: 0, w2: 0, rate0: 0.038, rate1: 0.00001, rate2: 0.00001},
+	'best-online': {alg: 'online', w0: 0.1, w1: 0.1, w2: 0.1, rate0: 0.2, rate1: 0.0001, rate2: 0.0001}
+};
+
+$('#predef').change(() => {
+	var predef = PREDEF[$('#predef').val()];
+	if(predef) {
+		for(var key in predef) {
+			$('#' + key).val(predef[key]);
+		}
+	}
+});
 
 $('img').click(event => {
 	img.select(event.target);
@@ -102,7 +138,13 @@ function proceseaza_imagine() {
 		}
 	}
 
-	var clasif = perceptron_online(X, Y);
+	var clasif;
+	switch($('#alg').val()) {
+		case 'online': clasif = perceptron_online(X, Y); break;
+		case 'batch':  clasif = perceptron_batch(X, Y); break;
+	}
+
+
 	$('#iter_tot').text(clasif.iter);
 	$('#errs_tot').text(clasif.totErrs);
 	stopShow();
@@ -110,7 +152,7 @@ function proceseaza_imagine() {
 }
 
 function perceptron_online(X, Y) {
-	var w = [0.1, 0.1, 0.1];
+	var w = [0, 1, 2].map(j => Number($('#w' + j).val()));
 	var wLog = [];
 	var errs = 1;
 	var iter;
@@ -122,7 +164,7 @@ function perceptron_online(X, Y) {
 		errs = 0;
 		for(var i=0; i<X.length; i++) {
 			var y = sgn(prod_scalar(w, X[i])); // predictie
-			if(y * Y[i] < 0) { // semne diferite
+			if(y * Y[i] <= 0) { // semne diferite
 				errs++;
 				totErrs++;
 				wLog.push({
@@ -154,6 +196,63 @@ function perceptron_online(X, Y) {
 	};
 }
 
+function perceptron_batch(X, Y) {
+	var w = [0, 1, 2].map(j => Number($('#w' + j).val()));
+	var wLog = [];
+	var errs = 1;
+	var iter;
+	var totErrs = 0;
+	var max_iter = Number($('#max_iter').val());
+
+	var rates = [0, 1, 2].map(j => Number($('#rate' + j).val()));
+
+	for(iter=0; iter<max_iter && errs; iter++) {
+		errs = 0;
+		var loss = 0; // scalar
+		var loss_grad = [0, 0, 0]; // vector
+
+		for(var i=0; i<X.length; i++) {
+			var y = prod_scalar(w, X[i]); // predictie
+			if(y * Y[i] <= 0) { // semne diferite
+				errs++;
+				totErrs++;
+				loss += abs(y);
+				for(var j=0; j<3; j++) {
+					loss_grad[j] += Y[i] * X[i][j];
+				}
+			}
+		}
+
+		wLog.push({
+			w: [w[0], w[1], w[2]],
+			iter: iter+1,
+			errs: errs,
+			loss: loss / X.length
+		});
+		if(errs) {
+			for(var j=0; j<3; j++) {
+				w[j] += rates[j] * loss_grad[j] / X.length;
+			}
+		}
+	}
+	wLog.push({
+		w: [w[0], w[1], w[2]],
+		iter: iter,
+		errs: errs,
+		loss: loss / X.length
+	});
+
+	console.log('DONE', iter, 'iterations', errs, 'errors.', 'w=', w);
+
+	return {
+		w: w,
+		iter: iter,
+		wLog: wLog,
+		loss: loss,
+		totErrs: totErrs
+	};
+}
+
 var showFrontieraTimeout = null; // timeout id
 
 function showFrontiera(wLog, k) {
@@ -180,19 +279,20 @@ function frontiera(log) {
 		img.circle(log.point.x, log.point.y, 4);
 	}
 
-	draw_bar(0);
-	draw_bar(1);
-	draw_bar(2);
+	draw_bar('w0', '#wbar0', w[0]);
+	draw_bar('w1', '#wbar1', w[1]);
+	draw_bar('w2', '#wbar2', w[2]);
+	draw_bar('loss', '#lossbar', log.loss);
 
-	function draw_bar(j) {
-		var weight = w[j];
-		$('#w'+j).width(Math.abs(100*weight)).css({
-			left: weight < 0 ? 100*weight : 0
-		}).text('w' + j + ' = ' + Math.round(weight * 1000) / 1000);
+	function draw_bar(label, sel, val) {
+		$(sel).toggle(val !==undefined)
+			.width(Math.abs(100*val)).css({
+				left: val < 0 ? 100*val : 0
+			}).text(label + ' = ' + Math.round(val * 1000) / 1000);
 	}
 
 	$('#iter_crt').text(log.iter);
-	$('#err_crt').text(log.err);
+	$('#err_crt').text(undef(log.err, 'n/a'));
 }
 </script>
 </body>
