@@ -1,0 +1,335 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AdaBoost</title>
+<script
+  src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script>
+<script src="../lib/math.js"></script>
+<script src="../lib/img.js"></script>
+<script src="adaboost.js"></script>
+<link href="../lib/img.css" rel="stylesheet">
+<style>
+
+table.clasificatori {
+	border-collapse: collapse;
+	display: inline-table;
+	vertical-align: top;
+}
+table.clasificatori thead {
+	background-color: gray;
+	color: white;
+}
+.clasificatori td {
+	text-align: center;
+	border: 1px solid gray;
+}
+
+.bord {
+	position: absolute;
+}
+
+.bord0-1 {
+	border-left: 4px solid rgba(0, 0, 255, 0.5);
+	border-right: 4px solid rgba(255, 0, 0, 0.5);
+}
+
+.bord01 {
+	border-left: 4px solid rgba(255, 0, 0, 0.5);
+	border-right: 4px solid rgba(0, 0, 255, 0.5);
+
+}
+
+.bord1-1 {
+	border-top: 4px solid rgba(0, 0, 255, 0.5);
+	border-bottom: 4px solid rgba(255, 0, 0, 0.5);
+}
+
+
+.bord11 {
+	border-top: 4px solid rgba(255, 0, 0, 0.5);
+	border-bottom: 4px solid rgba(0, 0, 255, 0.5);
+}
+
+.hover {
+	background-color: #ddf;
+}
+#cautareTmin {
+	display: inline-block;
+	vertical-align: top;
+}
+</style>
+<body>
+	T:
+	<input id="t" value="3" size="2" type="number" style="width: 50px"> Click pe imagine.
+
+	<div class="images">
+		<canvas></canvas>
+		<table>
+			<tr>
+				<td rowspan="2"><img src="points0.bmp" crossorigin=""></td>
+				<td rowspan="2">
+					<img src="points1.bmp" crossorigin=""><br>
+					<img src="../perceptron/test01.bmp" crossorigin="">
+					<img src="../perceptron/test02.bmp" crossorigin="">
+					<img src="../perceptron/test04.bmp" crossorigin="">
+				</td>
+				<td><img src="points2.bmp" crossorigin=""></td>
+				<td><img src="points3.bmp" crossorigin=""></td>
+			</tr>
+			<tr>
+				<td><img src="points4.bmp" crossorigin=""></td>
+				<td><img src="points5.bmp" crossorigin=""></td>
+			</tr>
+		</table>
+	</div>
+
+	Rata de succes: <b id="succes">-</b>
+	<button id="arataclasif">Arata toate frontierele</button>
+
+	<br>
+	<table class="clasificatori">
+		<thead>
+			<tr>
+				<th rowspan="2">Nr.</th>
+				<th rowspan="2">Alpha</th>
+				<th rowspan="2">Eroare</th>
+				<th rowspan="2">Coord</th>
+				<th rowspan="2">Prag</th>
+				<th rowspan="2">Clase</th>
+				<th rowspan="2">Duplicat?</th>
+				<th colspan="4">Punctul de sub mouse</th>
+			</tr>
+			<tr>
+				<th>Vot</th>
+				<th>*alpha</th>
+				<th>Suma</th>
+				<th>Final</th>
+			</tr>
+		</thead>
+		<tbody id="clasificatori">
+		</tbody>
+	</table>
+
+	<div id="cautareTmin">
+		<button id="gasesteTmin1">Gaseste T min cu eroare zero (cautare binara)</button>
+		<button id="gasesteTmin2">Gaseste T min cu eroare zero (cautare secventiala)</button>
+		<button id="gasesteTmin3">Gaseste T min cu eroare zero (constructiv)</button>
+		<div id="gasitTmin"></div>
+		<ul></ul>
+	</div>
+</body>
+<script>
+
+$('img').click(event => {
+	img.select(event.target);
+	proceseaza_imagine();
+});
+
+$('canvas').click(proceseaza_imagine);
+
+function proceseaza_imagine() {
+	var X = []; // instante-trasaturi
+	var Y = []; // etichete
+	var Xmin = [Infinity, Infinity]; // val minime pt trasaturi - pt eficientizarea cautarii clasificatorului slab
+	var Xmax = [-Infinity, -Infinity]; // val maxime pt trasaturi
+
+	for(var i=0; i<img.pixels.length; i+=4) {
+		var [r, g, b] = img.getRGB(i);
+
+		if(!r || !b) {
+			var x = img.getx(i);
+			var y = img.gety(i);
+			X.push([x, y]);
+			Y.push(r ? +1 : -1);
+
+			if(x < Xmin[0]) Xmin[0] = x;
+			if(x > Xmax[0]) Xmax[0] = x;
+			if(y < Xmin[1]) Xmin[1] = y;
+			if(y > Xmax[1]) Xmax[1] = y;
+		}
+	}
+
+	var clasif = adaboost(X, Y, Xmin, Xmax, Number($('#t').val()));
+
+	console.log('strong clasif', clasif);
+	displayClasif(clasif);
+	displayStrongness(clasif, X, Y);
+	setTimeout(()=>drawBoundary(clasif));
+	
+	var offset = $('canvas').offset();
+	$('canvas').off('mousemove');
+	$('canvas').mousemove((event)=> {
+		var x = event.pageX - offset.left;
+		var y = event.pageY - offset.top;
+		arataVoturi(clasif, x, y);
+	});
+
+	$('#arataclasif').off().click(() => {
+		clasif.hs.forEach(showBord);
+	});
+	$('.bord').remove();
+	$('#gasesteTmin1').off().click(()=>gasesteTmin(X, Y, Xmin, Xmax, 'binar'));
+	$('#gasesteTmin2').off().click(()=>gasesteTmin(X, Y, Xmin, Xmax, 'secvential'));
+	$('#gasesteTmin3').off().click(()=>gasesteTmin(X, Y, Xmin, Xmax, 'constructiv'));
+	$('#gasitTmin').empty();
+	$('#cautareTmin > ul').empty();
+}
+
+function drawBoundary(clasif) {
+	for(var x=0; x<img.w; x++) {
+		for(var y=0; y<img.h; y++) {
+			drawPixel(clasif, x, y);
+		}
+	}
+
+	//drawPixelAsync(clasif, 0, 0);
+}
+
+function drawPixel(clasif, x, y) {
+	var [r, g, b] = img.getRGBxy(x, y);
+	if(!r || !b) {
+		return;
+	}
+	var clasa = clasif.clasifica([x, y]);
+	img.pixel(x, y, clasa === 1 ? [255, 255, 0] : [0, 255, 255]);
+}
+
+function drawPixelAsync(clasif, x, y) {
+	drawPixel(clasif, x, y);
+	if(++x >= img.w) {
+		x = 0;
+		if(++y >= img.h) {
+			return;
+		}
+	}
+	setTimeout(()=>drawPixelAsync(clasif, x, y));
+}
+
+function displayClasif(clasif) {
+	var eti = [
+		{'-1': 'stanga albastru - dreapta rosu', 1: 'stanga rosu - dreapta albastru'},
+		{'-1': 'sus albastru - jos rosu', 1: 'sus rosu - jos albastru'}
+	];
+
+	var trs = clasif.hs.map((h, t) => {
+		var duplicat = clasif.hs.find((h1, t1) => t1 < t && h1.j === h.j && h1.prag === h.prag);
+		var tds = [
+			t+1,
+			clasif.alphas[t].toFixed(2),
+			h.err.toFixed(8),
+			h.j ? 'y': 'x',
+			h.prag,
+			eti[h.j][h.clasa],
+			duplicat ? 'DUPLICAT' : '',
+			'', '', '', ''
+		].map(text => $('<td>').text(text));
+
+		return $('<tr>').append(tds).hover(event=>show(event, h));
+	});
+
+	$('#clasificatori').html('').html(trs);
+
+	function show(event, h) {
+		$(event.currentTarget).toggleClass('hover', event.type==='mouseenter');
+		$('.bord').remove();
+		if(event.type==='mouseleave') {
+			return;
+		}
+		showBord(h);
+	}
+}
+
+function showBord(h) {
+	var bord = $('<div class="bord bord' + h.j + h.clasa + '">').appendTo('.images');
+	var pos = img.position;
+
+	if(h.j === 0) {
+		bord.css({left: pos.left+h.prag-4, width: 1, top: 0, bottom: 0});
+	} else {
+		bord.css({left: 0, right: 0, top: pos.top+h.prag-4, height: 1});
+	}
+}
+
+function arataVoturi(clasif, x, y) {
+	var suma = 0;
+	var trs = $('#clasificatori > tr');
+	for(var t=0; t<clasif.hs.length; t++) {
+		var h = clasif.hs[t];
+		var tr = trs.eq(t);
+		var tds = tr.children().slice(7);
+		var vot = h.clasifica([x, y]);
+		tds.eq(0).text(vot);
+		vot *= clasif.alphas[t];
+		tds.eq(1).text(vot.toFixed(2));
+		suma += vot;
+		tds.eq(2).text(suma.toFixed(2));
+		tds.eq(3).text(sgn(suma));
+	}
+}
+
+function displayStrongness(clasif, X, Y) {
+	var errs = numaraErori(clasif, X, Y);
+	$('#succes').text((100-100*errs/X.length).toFixed(2) + '% (' + errs + ' clasificari gresite din ' + X.length + ')');
+}
+
+function numaraErori(clasif, X, Y) {
+	var errs = 0;
+	for(var i=0; i<X.length; i++) {
+		if(Y[i] * clasif.clasifica(X[i]) < 0) {
+			errs ++;
+		}
+	}
+	return errs;
+}
+
+function gasesteTmin(X, Y, Xmin, Xmax, modCautare) {
+	var errs;
+	var outputElem = $('#cautareTmin > ul').empty();
+
+	if(modCautare === 'constructiv') {
+		var clasif = adaboost(X, Y, Xmin, Xmax, 100000, (clasif) => {
+			errs = numaraErori(clasif, X, Y);
+			console.log('T =', clasif.hs.length, ' errs =', errs);
+			var li = $('<li>').text('incerc T=' + clasif.hs.length + '... ' + errs + ' erori.').appendTo(outputElem);
+			return errs === 0;
+		});
+		$('#gasitTmin').text('Gasit T = ' + clasif.hs.length + ' cu ' + errs + ' erori.');
+		return;
+	}
+
+	var min = 1; 
+	var max = 128;
+
+	var t=0;
+	do {
+		t = modCautare === 'binar' ? Math.floor((min+max)/2) : t+1;
+
+		console.log('caut T =', t);
+		var li = $('<li>').text('incerc T=' + t + '...').appendTo(outputElem);
+		var clasif = adaboost(X, Y, Xmin, Xmax, t);
+		errs = numaraErori(clasif, X, Y);
+		console.log('caut T =', t, ' erori =', errs);
+		li.append(' ' + errs + ' erori.');
+		if(modCautare === 'binar') {
+			if(errs === 0) {
+				max = t-1;
+				if(max < min) { break; } // gasit t optim
+			} else {
+				min = t+1;
+				if(min > max) {
+					break;;
+				}
+			}
+		} else if(errs === 0) {
+			break;
+		}
+	} while(t < 128);
+
+	$('#gasitTmin').text('Gasit T = ' + t + ' cu ' + errs + ' erori.');
+}
+</script>
+</body>
+</html>
