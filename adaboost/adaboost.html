@@ -288,6 +288,7 @@ function numaraErori(clasif, X, Y) {
 function gasesteTmin(X, Y, Xmin, Xmax, modCautare) {
 	var errs;
 	var outputElem = $('#cautareTmin > ul').empty();
+	var start = new Date().getTime();
 
 	if(modCautare === 'constructiv') {
 		var clasif = adaboost(X, Y, Xmin, Xmax, 100000, (clasif) => {
@@ -296,7 +297,8 @@ function gasesteTmin(X, Y, Xmin, Xmax, modCautare) {
 			var li = $('<li>').text('incerc T=' + clasif.hs.length + '... ' + errs + ' erori.').appendTo(outputElem);
 			return errs === 0;
 		});
-		$('#gasitTmin').text('Gasit T = ' + clasif.hs.length + ' cu ' + errs + ' erori.');
+		var durata = new Date().getTime() - start;
+		$('#gasitTmin').text('Gasit T = ' + clasif.hs.length + ' cu ' + errs + ' erori in ' + durata + ' milisecunde.');
 		return;
 	}
 
@@ -328,7 +330,8 @@ function gasesteTmin(X, Y, Xmin, Xmax, modCautare) {
 		}
 	} while(t < 128);
 
-	$('#gasitTmin').text('Gasit T = ' + t + ' cu ' + errs + ' erori.');
+	var durata = new Date().getTime() - start;
+	$('#gasitTmin').text('Gasit T = ' + t + ' cu ' + errs + ' erori in ' + durata + ' milisecunde.');
 }
 </script>
 </body>
